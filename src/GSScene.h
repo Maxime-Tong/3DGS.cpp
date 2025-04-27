@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <iostream>
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include "vulkan/VulkanContext.h"
 #include "vulkan/Buffer.h"
 
@@ -22,6 +23,18 @@ struct PlyHeader {
 
 class GSScene {
 public:
+    explicit GSScene(const std::string& filename, const std::string& clusterFolder)
+        : filename(filename), clusterFolder(clusterFolder) {
+        // check if file exists
+        if (!std::filesystem::exists(filename)) {
+            throw std::runtime_error("File does not exist: " + filename);
+        }
+        // check if cluster folder exists
+        if (!std::filesystem::exists(clusterFolder)) {
+            throw std::runtime_error("Cluster folder does not exist: " + clusterFolder);
+        }
+    }
+
     explicit GSScene(const std::string& filename)
         : filename(filename) {
         // check if file exists
@@ -45,14 +58,32 @@ public:
         float shs[48];
     };
 
+    struct clusterFeature {
+        glm::vec3 position; // x, y, z
+        glm::quat rotation; // w, a, b, c
+
+        float distance(const clusterFeature& other) const {
+            // ||position - other.position||^2 + ||rotation - other.rotation||^2
+            float d1 = glm::length(position - other.position);
+            float d2 = glm::length(rotation - other.rotation);
+            return d1 * d1 + d2 * d2;
+        }
+    };
+
     struct Cov3DUpperRight {
         float mat[6];
     };
 
     std::shared_ptr<Buffer> vertexBuffer;
     std::shared_ptr<Buffer> cov3DBuffer;
+    std::shared_ptr<Buffer> clusterMaskBuffer;
+    
+    std::vector<clusterFeature> clusters;
+    
 private:
     std::string filename;
+    std::string clusterFolder;
+
     PlyHeader header;
 
     std::shared_ptr<Buffer> createStagingBuffer(const std::shared_ptr<VulkanContext>& sharedPtr, unsigned long i);

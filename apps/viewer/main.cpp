@@ -25,7 +25,15 @@ int main(int argc, char** argv) {
     args::ValueFlag<uint32_t> widthFlag{parser, "width", "Set window width", {'w', "width"}};
     args::ValueFlag<uint32_t> heightFlag{parser, "height", "Set window height", {'h', "height"}};
     args::Flag noGuiFlag{parser, "no-gui", "Disable GUI", { "no-gui"}};
+    args::ValueFlag<std::string> clusterFolder{
+        parser, 
+        "cluster-folder", 
+        "Path to folder containing cluster information (default: empty)", 
+        {'c', "cluster-folder"},
+        ""  // default empty string
+    };
     args::Positional<std::string> scenePath{parser, "scene", "Path to scene file", "scene.ply"};
+
 
     try {
         parser.ParseCLI(argc, argv);
@@ -59,7 +67,8 @@ int main(int argc, char** argv) {
             ? std::make_optional(envVars.get(physicalDeviceId).value())
             : std::nullopt,
         envVars.get_or(immediateSwapchain, false),
-        args::get(scenePath)
+        args::get(scenePath),
+        args::get(clusterFolder)
     };
 
     // check that the scene file exists

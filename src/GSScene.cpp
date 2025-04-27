@@ -14,6 +14,8 @@
 #include "spdlog/spdlog.h"
 #include "vulkan/Shader.h"
 
+#include "json.h"
+
 struct VertexStorage {
     glm::vec3 position;
     glm::vec3 normal;
@@ -57,8 +59,41 @@ void GSScene::load(const std::shared_ptr<VulkanContext>&context) {
         assert(vertexStorage.normal.y == 0.0f);
         assert(vertexStorage.normal.z == 0.0f);
     }
-
+    
     vertexBuffer->uploadFrom(vertexStagingBuffer);
+
+    // Load the cluster data
+    std::string clusterJsonPath = clusterFolder + "/clusters.json";
+    std::ifstream clusterFile(clusterJsonPath);
+    if (!clusterFile.is_open()) {
+        throw std::runtime_error("Could not open cluster file: " + clusterJsonPath);
+    }
+    nlohmann::json clusterJson;
+    clusterFile >> clusterJson;
+    const auto& centers = clusterJson["centers"];
+    const auto& gaussianIdxs = clusterJson["gaussian_idxs"];
+    printf("Loaded {%d} clusters\n", centers.size());
+    size_t numClusters = centers.size();
+    auto clusterMaskStagingBuffer = Buffer::staging(context, numClusters * header.numVertices * sizeof(bool));
+    auto* clusterMasks = static_cast<bool *>(clusterMaskStagingBuffer->allocation_info.pMappedData);
+
+    memset(clusterMasks, 0, numClusters * header.numVertices * sizeof(bool));
+    for (size_t i = 0; i < numClusters; i++) {
+        auto center = centers[i].get<std::vector<float>>();
+        clusters.push_back({
+            glm::vec3(center.at(0), center.at(1), center.at(2)), 
+            glm::quat(center.at(6), center.at(3), center.at(4), center.at(5))
+        });
+        
+        auto gaussianIdx = gaussianIdxs[i].get<std::vector<int>>();
+        auto* current_mask = clusterMasks + i * header.numVertices;
+        for (const auto& idx : gaussianIdx) {
+            current_mask[idx] = true;
+        }
+    }
+
+    clusterMaskBuffer = createBuffer(context, numClusters * header.numVertices * sizeof(bool));
+    clusterMaskBuffer->uploadFrom(clusterMaskStagingBuffer);
 
     auto endTime = std::chrono::high_resolution_clock::now();
     spdlog::info("Loaded {} in {}ms", filename,
@@ -165,6 +200,8 @@ void GSScene::precomputeCov3D(const std::shared_ptr<VulkanContext>&context) {
                                              vertexBuffer);
     descriptorSet->bindBufferToDescriptorSet(1, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eCompute,
                                              cov3DBuffer);
+    descriptorSet->bindBufferToDescriptorSet(2, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eCompute,
+                                             clusterMaskBuffer);
     descriptorSet->build();
 
     pipeline->addDescriptorSet(0, descriptorSet);

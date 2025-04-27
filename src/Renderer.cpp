@@ -13,6 +13,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "vulkan/Utils.h"
+#include "json.h"
 
 #include <spdlog/spdlog.h>
 
@@ -28,6 +29,8 @@ void Renderer::initialize() {
     createRenderPipeline();
     createCommandPool();
     recordPreprocessCommandBuffer();
+
+    setClusterId();
 }
 
 void Renderer::handleInput() {
@@ -156,7 +159,7 @@ void Renderer::initializeVulkan() {
 
 void Renderer::loadSceneToGPU() {
     spdlog::debug("Loading scene to GPU");
-    scene = std::make_shared<GSScene>(configuration.scene);
+    scene = std::make_shared<GSScene>(configuration.scene, configuration.clusterFolder);
     scene->load(context);
 
     // reset descriptor pool
@@ -382,7 +385,7 @@ void Renderer::draw() {
 
 startOfRenderLoop:
     handleInput();
-
+    setClusterId();
     updateUniforms();
 
     auto submitInfo = vk::SubmitInfo{}.setCommandBuffers(preprocessCommandBuffer.get());
@@ -721,7 +724,8 @@ void Renderer::updateUniforms() {
     auto [width, height] = swapchain->swapchainExtent;
     data.width = width;
     data.height = height;
-    data.camera_position = glm::vec4(camera.position, 1.0f);
+    data.camera_position = glm::vec4(camera.position, 1.0f);    
+    data.clusterId = camera.clusterId;
 
     auto rotation = glm::mat4_cast(camera.rotation);
     auto translation = glm::translate(glm::mat4(1.0f), camera.position);
@@ -751,6 +755,18 @@ void Renderer::updateUniforms() {
     data.tan_fovx = tan_fovx;
     data.tan_fovy = tan_fovy;
     uniformBuffer->upload(&data, sizeof(UniformBuffer), 0);
+}
+
+void Renderer::setClusterId() {
+    float minDist = std::numeric_limits<float>::max();
+    for (int cid = 0; cid < scene->clusters.size(); cid++) {
+        float dist = scene->clusters[cid].distance({camera.position, camera.rotation});
+        if (dist < minDist) {
+            minDist = dist;
+            camera.clusterId = cid;
+        }
+    }
+    // printf("clusterId: %d\n", camera.clusterId);
 }
 
 Renderer::~Renderer() {

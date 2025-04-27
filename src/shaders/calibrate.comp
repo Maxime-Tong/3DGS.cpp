@@ -19,6 +19,7 @@ layout (std140, set = 1, binding = 0) uniform Params {
     uint height;
     float tan_fovx;
     float tan_fovy;
+    int clusterId;
 };
 
 layout (std430, set = 1, binding = 1) writeonly buffer VertexAttributes {

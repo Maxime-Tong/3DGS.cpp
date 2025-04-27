@@ -26,6 +26,7 @@ public:
         uint32_t height;
         float tan_fovx;
         float tan_fovy;
+        int clusterId;
     };
 
     struct VertexAttributeBuffer {
@@ -43,6 +44,7 @@ public:
         float fov;
         float nearPlane;
         float farPlane;
+        int clusterId;
 
         void translate(glm::vec3 translation) {
             position += rotation * translation;
@@ -78,10 +80,12 @@ public:
 
     Camera camera {
         .position = glm::vec3(0.0f, 0.0f, 0.0f),
-        .rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+        // .rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f),
+        .rotation = glm::quat(0.0f, 1.0f, 0.0f, 0.0f),        
         .fov = 45.0f,
         .nearPlane = 0.1f,
-        .farPlane = 1000.0f
+        .farPlane = 1000.0f,
+        .clusterId = 0
     };
 
 private:
@@ -165,6 +169,8 @@ private:
     void createCommandPool();
 
     void updateUniforms();
+
+    void setClusterId();
 };
 
 

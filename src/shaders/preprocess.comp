@@ -11,6 +11,10 @@ layout (std430, set = 0, binding = 1) readonly buffer Cov3Ds {
     float cov3ds[];
 };
 
+layout (std430, set = 0, binding = 2) readonly buffer ClusterMasks {
+    float clusterMasks[];
+};
+
 layout (std140, set = 1, binding = 0) uniform Params {
     vec4 camera_position;
     mat4 proj_mat;
@@ -19,6 +23,7 @@ layout (std140, set = 1, binding = 0) uniform Params {
     uint height;
     float tan_fovx;
     float tan_fovy;
+    int clusterId;
 };
 
 layout (std430, set = 1, binding = 1) writeonly buffer VertexAttributes {
@@ -114,7 +119,7 @@ float ndc2Pix(float v, int S)
 
 void main() {
     uint index = gl_GlobalInvocationID.x;
-    if (index >= vertices.length()) {
+    if (index >= vertices.length() || clusterMasks[clusterId * vertices.length() + index] == 0) {
         return;
     }
     if (index == 0) {
