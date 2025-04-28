@@ -29,7 +29,6 @@ void Renderer::initialize() {
     createRenderPipeline();
     createCommandPool();
     recordPreprocessCommandBuffer();
-
     setClusterId();
 }
 
@@ -179,6 +178,8 @@ void Renderer::createPreprocessPipeline() {
                                         scene->vertexBuffer);
     inputSet->bindBufferToDescriptorSet(1, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eCompute,
                                         scene->cov3DBuffer);
+    inputSet->bindBufferToDescriptorSet(2, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eCompute,
+                                        scene->clusterMaskBuffer);
     inputSet->build();
     preprocessPipeline->addDescriptorSet(0, inputSet);
 
@@ -725,7 +726,7 @@ void Renderer::updateUniforms() {
     data.width = width;
     data.height = height;
     data.camera_position = glm::vec4(camera.position, 1.0f);    
-    data.clusterId = camera.clusterId;
+    data.maskOffset = camera.maskOffset;
 
     auto rotation = glm::mat4_cast(camera.rotation);
     auto translation = glm::translate(glm::mat4(1.0f), camera.position);
@@ -759,14 +760,27 @@ void Renderer::updateUniforms() {
 
 void Renderer::setClusterId() {
     float minDist = std::numeric_limits<float>::max();
+    GSScene::clusterFeature camera_feature = {camera.position, glm::conjugate(glm::normalize(camera.rotation))};
+    
     for (int cid = 0; cid < scene->clusters.size(); cid++) {
-        float dist = scene->clusters[cid].distance({camera.position, camera.rotation});
+        float dist = scene->clusters[cid].distance(camera_feature);
         if (dist < minDist) {
             minDist = dist;
-            camera.clusterId = cid;
+            camera.maskOffset = cid * scene->getNumVertices();
         }
     }
-    // printf("clusterId: %d\n", camera.clusterId);
+
+    // printf("camera rotation: %f %f %f %f \t cluster rotation: %f %f %f %f \t cid: %d\n", 
+    //        camera_feature.rotation.w,
+    //        camera_feature.rotation.x, 
+    //        camera_feature.rotation.y,
+    //        camera_feature.rotation.z,
+    //        scene->clusters[0].rotation.w, 
+    //        scene->clusters[0].rotation.x,
+    //        scene->clusters[0].rotation.y,
+    //        scene->clusters[0].rotation.z,
+    //        camera.maskOffset / scene->getNumVertices());
+
 }
 
 Renderer::~Renderer() {

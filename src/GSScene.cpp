@@ -72,12 +72,14 @@ void GSScene::load(const std::shared_ptr<VulkanContext>&context) {
     clusterFile >> clusterJson;
     const auto& centers = clusterJson["centers"];
     const auto& gaussianIdxs = clusterJson["gaussian_idxs"];
+#ifdef DEBUG
     printf("Loaded {%d} clusters\n", centers.size());
+#endif
     size_t numClusters = centers.size();
-    auto clusterMaskStagingBuffer = Buffer::staging(context, numClusters * header.numVertices * sizeof(bool));
-    auto* clusterMasks = static_cast<bool *>(clusterMaskStagingBuffer->allocation_info.pMappedData);
+    auto clusterMaskStagingBuffer = Buffer::staging(context, numClusters * header.numVertices * sizeof(int));
+    auto* clusterMasks = static_cast<int *>(clusterMaskStagingBuffer->allocation_info.pMappedData);
 
-    memset(clusterMasks, 0, numClusters * header.numVertices * sizeof(bool));
+    memset(clusterMasks, 0, numClusters * header.numVertices * sizeof(int));
     for (size_t i = 0; i < numClusters; i++) {
         auto center = centers[i].get<std::vector<float>>();
         clusters.push_back({
@@ -88,11 +90,12 @@ void GSScene::load(const std::shared_ptr<VulkanContext>&context) {
         auto gaussianIdx = gaussianIdxs[i].get<std::vector<int>>();
         auto* current_mask = clusterMasks + i * header.numVertices;
         for (const auto& idx : gaussianIdx) {
-            current_mask[idx] = true;
+            current_mask[idx] = 1;
         }
+        // printf("Cluster %zu: header.numVertices = %d, gaussianIdxs = %d\n", i, header.numVertices, gaussianIdx.size());
     }
 
-    clusterMaskBuffer = createBuffer(context, numClusters * header.numVertices * sizeof(bool));
+    clusterMaskBuffer = createBuffer(context, numClusters * header.numVertices * sizeof(int));
     clusterMaskBuffer->uploadFrom(clusterMaskStagingBuffer);
 
     auto endTime = std::chrono::high_resolution_clock::now();
@@ -200,8 +203,6 @@ void GSScene::precomputeCov3D(const std::shared_ptr<VulkanContext>&context) {
                                              vertexBuffer);
     descriptorSet->bindBufferToDescriptorSet(1, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eCompute,
                                              cov3DBuffer);
-    descriptorSet->bindBufferToDescriptorSet(2, vk::DescriptorType::eStorageBuffer, vk::ShaderStageFlagBits::eCompute,
-                                             clusterMaskBuffer);
     descriptorSet->build();
 
     pipeline->addDescriptorSet(0, descriptorSet);
