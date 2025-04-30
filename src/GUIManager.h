@@ -17,6 +17,8 @@ public:
 
     static void pushMetric(const std::string& name, float value);
 
+    static void pushCameraInfo(const std::string& name, float value);
+
     static void pushMetric(const std::unordered_map<std::string, float>& name);
 
     static bool wantCaptureMouse();

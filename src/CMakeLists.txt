@@ -7,6 +7,7 @@ file(GLOB EXTERNAL_SOURCE
         ${imgui_SOURCE_DIR}/*.cpp
         ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
         ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
+        third_party/json/jsoncpp.cpp
         third_party/implot/implot.cpp
         third_party/implot/implot_demo.cpp
         third_party/implot/implot_items.cpp

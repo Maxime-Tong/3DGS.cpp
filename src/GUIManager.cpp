@@ -22,6 +22,13 @@ struct ScrollingBuffer {
             offset =  (offset + 1) % maxSize;
         }
     }
+    const ImVec2& back() {
+        if (data.size() < maxSize)
+            return data.back();
+        else {
+            return data[(offset + maxSize - 1) % maxSize];
+        }
+    }
     void clear() {
         if (data.size() > 0) {
             data.shrink(0);
@@ -32,10 +39,12 @@ struct ScrollingBuffer {
 
 static std::shared_ptr<std::unordered_map<std::string, ScrollingBuffer>> metricsMap;
 static std::shared_ptr<std::unordered_map<std::string, float>> textMetricsMap;
+static std::shared_ptr<std::unordered_map<std::string, float>> cameraInfoMap;
 
 GUIManager::GUIManager() {
     metricsMap = std::make_shared<std::unordered_map<std::string, ScrollingBuffer>>();
     textMetricsMap = std::make_shared<std::unordered_map<std::string, float>>();
+    cameraInfoMap = std::make_shared<std::unordered_map<std::string, float>>();
 }
 
 void GUIManager::init() {
@@ -80,7 +89,7 @@ void GUIManager::buildGui() {
         ImGui::Text("%s: %.2f", name.c_str(), value);
     }
     for (auto & [name, values]: *metricsMap) {
-        ImGui::Text("%s: %.2f", name.c_str(), values.data.empty() ? 0 : values.data.back().y);
+        ImGui::Text("%s: %.2f", name.c_str(), values.data.empty() ? 0 : values.back().y);
     }
     ImGui::End();
 
@@ -94,6 +103,14 @@ void GUIManager::buildGui() {
     ImGui::Text("Mouse captured: %s", mouseCapture ? "true" : "false");
     ImGui::End();
 
+    ImGui::SetNextWindowPos(ImVec2(10, 400), ImGuiCond_FirstUseEver);
+    ImGui::Begin("Current Camera", &popen, ImGuiWindowFlags_AlwaysAutoResize);
+    ImGui::Text("Position: %.2f, %.2f, %.2f", cameraInfoMap->at("posX"), cameraInfoMap->at("posY"), cameraInfoMap->at("posZ"));
+    ImGui::Text("Rotation: %.2f, %.2f, %.2f, %.2f", cameraInfoMap->at("qantX"), cameraInfoMap->at("qantY"), cameraInfoMap->at("qantZ"), cameraInfoMap->at("qantW"));
+    for (auto& [name, value]: *cameraInfoMap) {
+    }
+    ImGui::End();
+
     if (mouseCapture) {
         ImGui::EndDisabled();
     }
@@ -104,6 +121,14 @@ void GUIManager::pushTextMetric(const std::string& name, float value) {
         textMetricsMap->insert({name, value});
     } else {
         textMetricsMap->at(name) = value;
+    }
+}
+
+void GUIManager::pushCameraInfo(const std::string& name, float value) {
+    if (cameraInfoMap->find(name) == cameraInfoMap->end()) {
+        cameraInfoMap->insert({name, value});
+    } else {
+        cameraInfoMap->at(name) = value;
     }
 }
 

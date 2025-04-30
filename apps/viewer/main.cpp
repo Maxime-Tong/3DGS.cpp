@@ -32,6 +32,8 @@ int main(int argc, char** argv) {
         {'c', "cluster-folder"},
         ""  // default empty string
     };
+    // test cameras json
+    args::ValueFlag<std::string> cameraPathFlag(parser, "cameras", "Path to test cameras", {"camera_path"});
     args::Positional<std::string> scenePath{parser, "scene", "Path to scene file", "scene.ply"};
 
 
@@ -68,7 +70,8 @@ int main(int argc, char** argv) {
             : std::nullopt,
         envVars.get_or(immediateSwapchain, false),
         args::get(scenePath),
-        args::get(clusterFolder)
+        args::get(clusterFolder),
+        cameraPathFlag ? args::get(cameraPathFlag) : ""
     };
 
     // check that the scene file exists

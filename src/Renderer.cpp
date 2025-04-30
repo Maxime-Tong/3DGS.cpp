@@ -13,7 +13,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "vulkan/Utils.h"
-#include "json.h"
+#include "json/json.h"
 
 #include <spdlog/spdlog.h>
 
@@ -33,53 +33,64 @@ void Renderer::initialize() {
 }
 
 void Renderer::handleInput() {
-    auto translation = window->getCursorTranslation();
-    auto keys = window->getKeys(); // W, A, S, D
+    if (testCameras.size() == 0) 
+    {
+        auto translation = window->getCursorTranslation();
+        auto keys = window->getKeys(); // W, A, S, D
 
-    if ((!configuration.enableGui || (!guiManager.wantCaptureMouse() && !guiManager.mouseCapture)) && window->
-        getMouseButton()[0]) {
-        window->mouseCapture(true);
-        guiManager.mouseCapture = true;
+        if ((!configuration.enableGui || (!guiManager.wantCaptureMouse() && !guiManager.mouseCapture)) && window->
+            getMouseButton()[0]) {
+            window->mouseCapture(true);
+            guiManager.mouseCapture = true;
+        }
+
+        // rotate camera
+        if (!configuration.enableGui || guiManager.mouseCapture) {
+            if (translation[0] != 0.0 || translation[1] != 0.0) {
+                camera.rotation = glm::rotate(camera.rotation, static_cast<float>(translation[0]) * 0.005f,
+                                            glm::vec3(0.0f, -1.0f, 0.0f));
+                camera.rotation = glm::rotate(camera.rotation, static_cast<float>(translation[1]) * 0.005f,
+                                            glm::vec3(1.0f, 0.0f, 0.0f));
+            }
+        }
+
+        // move camera
+        if (!configuration.enableGui || !guiManager.wantCaptureKeyboard()) {
+            glm::vec3 direction = glm::vec3(0.0f, 0.0f, 0.0f);
+            if (keys[0]) { // W
+                direction += glm::vec3(0.0f, 0.0f, -1.0f);
+            }
+            if (keys[1]) { // A
+                direction += glm::vec3(-1.0f, 0.0f, 0.0f);
+            }
+            if (keys[2]) { // S
+                direction += glm::vec3(0.0f, 0.0f, 1.0f);
+            }
+            if (keys[3]) { // D
+                direction += glm::vec3(1.0f, 0.0f, 0.0f);
+            }
+            if (keys[4]) { // SPACE
+                direction += glm::vec3(0.0f, -1.0f, 0.0f);
+            }
+            if (keys[5]) { // LSHIFT
+                direction += glm::vec3(0.0f, 1.0f, 0.0f);
+            }
+            if (keys[6]) { // ESC
+                window->mouseCapture(false);
+                guiManager.mouseCapture = false;
+            }
+            if (direction != glm::vec3(0.0f, 0.0f, 0.0f)) {
+                direction = glm::normalize(direction);
+                camera.position += (glm::mat4_cast(camera.rotation) * glm::vec4(direction, 1.0f)).xyz() * 0.1f;
+            }
+        }
     }
-
-    // rotate camera
-    if (!configuration.enableGui || guiManager.mouseCapture) {
-        if (translation[0] != 0.0 || translation[1] != 0.0) {
-            camera.rotation = glm::rotate(camera.rotation, static_cast<float>(translation[0]) * 0.005f,
-                                          glm::vec3(0.0f, -1.0f, 0.0f));
-            camera.rotation = glm::rotate(camera.rotation, static_cast<float>(translation[1]) * 0.005f,
-                                          glm::vec3(-1.0f, 0.0f, 0.0f));
-        }
-    }
-
-    // move camera
-    if (!configuration.enableGui || !guiManager.wantCaptureKeyboard()) {
-        glm::vec3 direction = glm::vec3(0.0f, 0.0f, 0.0f);
-        if (keys[0]) {
-            direction += glm::vec3(0.0f, 0.0f, -1.0f);
-        }
-        if (keys[1]) {
-            direction += glm::vec3(-1.0f, 0.0f, 0.0f);
-        }
-        if (keys[2]) {
-            direction += glm::vec3(0.0f, 0.0f, 1.0f);
-        }
-        if (keys[3]) {
-            direction += glm::vec3(1.0f, 0.0f, 0.0f);
-        }
-        if (keys[4]) {
-            direction += glm::vec3(0.0f, 1.0f, 0.0f);
-        }
-        if (keys[5]) {
-            direction += glm::vec3(0.0f, -1.0f, 0.0f);
-        }
-        if (keys[6]) {
-            window->mouseCapture(false);
-            guiManager.mouseCapture = false;
-        }
-        if (direction != glm::vec3(0.0f, 0.0f, 0.0f)) {
-            direction = glm::normalize(direction);
-            camera.position += (glm::mat4_cast(camera.rotation) * glm::vec4(direction, 1.0f)).xyz() * 0.3f;
+    else
+    {
+        if (testCameraIndex < testCameras.size())
+        {
+            camera = testCameras[testCameraIndex];
+            testCameraIndex = (testCameraIndex + 1) % testCameras.size();
         }
     }
 }
@@ -160,6 +171,36 @@ void Renderer::loadSceneToGPU() {
     spdlog::debug("Loading scene to GPU");
     scene = std::make_shared<GSScene>(configuration.scene, configuration.clusterFolder);
     scene->load(context);
+
+        if (configuration.cameras != "") {
+        std::ifstream cameraFile(configuration.cameras);
+        Json::Value root;
+
+        Json::CharReaderBuilder builder;
+        JSONCPP_STRING errs;
+        Json::parseFromStream(builder, cameraFile, &root, &errs);
+        if (errs.size() != 0) {
+            spdlog::error("Error parsing camera file: {}", errs.c_str());
+        }
+        spdlog::info("Load {} test cameras", root.size());
+
+        for (auto& camera: root) {
+            glm::vec3 pos = glm::vec3(
+                camera["position"][0].asFloat(), 
+                camera["position"][1].asFloat(), 
+                camera["position"][2].asFloat());
+            glm::mat3 rot = glm::mat3(
+                camera["rotation"][0][1].asFloat(), camera["rotation"][0][2].asFloat(), camera["rotation"][0][3].asFloat(), 
+                camera["rotation"][1][1].asFloat(), camera["rotation"][1][2].asFloat(), camera["rotation"][1][3].asFloat(), 
+                camera["rotation"][2][1].asFloat(), camera["rotation"][2][2].asFloat(), camera["rotation"][2][3].asFloat());
+            glm::quat quat = glm::quat_cast(rot);
+            testCameras.push_back(Camera{.position = pos,
+                .rotation = quat,
+                .fov = 45.0f,
+                .nearPlane = 0.1f,
+                .farPlane = 1000.0f});
+        }
+    }
 
     // reset descriptor pool
     context->device->resetDescriptorPool(context->descriptorPool.get());
@@ -439,13 +480,16 @@ void Renderer::run() {
 
         auto now = std::chrono::high_resolution_clock::now();
         auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastFpsTime).count();
-        if (diff > 1000) {
-            spdlog::debug("FPS: {}", fpsCounter);
-            fpsCounter = 0;
-            lastFpsTime = now;
-        } else {
-            fpsCounter++;
-        }
+        
+        lastFpsTime = now;
+        guiManager.pushTextMetric("fps", 1000.0f / diff);
+        // if (diff > 1000) {
+        //     spdlog::debug("FPS: {}", fpsCounter);
+        //     fpsCounter = 0;
+        //     lastFpsTime = now;
+        // } else {
+        //     fpsCounter++;
+        // }
 
         retrieveTimestamps();
     }
@@ -740,22 +784,34 @@ void Renderer::updateUniforms() {
                                      camera.nearPlane,
                                      camera.farPlane) * view;
 
-    data.view_mat[0][1] *= -1.0f;
-    data.view_mat[1][1] *= -1.0f;
-    data.view_mat[2][1] *= -1.0f;
-    data.view_mat[3][1] *= -1.0f;
+    // data.view_mat[0][1] *= -1.0f;
+    // data.view_mat[1][1] *= -1.0f;
+    // data.view_mat[2][1] *= -1.0f;
+    // data.view_mat[3][1] *= -1.0f;
     data.view_mat[0][2] *= -1.0f;
     data.view_mat[1][2] *= -1.0f;
     data.view_mat[2][2] *= -1.0f;
     data.view_mat[3][2] *= -1.0f;
 
-    data.proj_mat[0][1] *= -1.0f;
-    data.proj_mat[1][1] *= -1.0f;
-    data.proj_mat[2][1] *= -1.0f;
-    data.proj_mat[3][1] *= -1.0f;
+    // data.proj_mat[0][1] *= -1.0f;
+    // data.proj_mat[1][1] *= -1.0f;
+    // data.proj_mat[2][1] *= -1.0f;
+    // data.proj_mat[3][1] *= -1.0f;
     data.tan_fovx = tan_fovx;
     data.tan_fovy = tan_fovy;
     uniformBuffer->upload(&data, sizeof(UniformBuffer), 0);
+
+    if (configuration.enableGui)
+    {
+        guiManager.pushCameraInfo("posX", camera.position.x);
+        guiManager.pushCameraInfo("posY", camera.position.y);
+        guiManager.pushCameraInfo("posZ", camera.position.z);
+
+        guiManager.pushCameraInfo("qantX", camera.rotation.x);
+        guiManager.pushCameraInfo("qantY", camera.rotation.y);
+        guiManager.pushCameraInfo("qantZ", camera.rotation.z);
+        guiManager.pushCameraInfo("qantW", camera.rotation.w);
+    }
 }
 
 void Renderer::setClusterId() {

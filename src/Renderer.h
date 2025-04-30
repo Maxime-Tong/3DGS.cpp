@@ -95,6 +95,7 @@ private:
     std::shared_ptr<VulkanContext> context;
     std::shared_ptr<ImguiManager> imguiManager;
     std::shared_ptr<GSScene> scene;
+    std::vector<Camera> testCameras;
     std::shared_ptr<QueryManager> queryManager = std::make_shared<QueryManager>();
     GUIManager guiManager {};
 
@@ -142,7 +143,8 @@ private:
     uint32_t numRadixSortBlocksPerWorkgroup = 32;
 #endif
 
-    int fpsCounter = 0;
+    float fpsCounter = 0;
+    int testCameraIndex = 0;
     std::chrono::high_resolution_clock::time_point lastFpsTime = std::chrono::high_resolution_clock::now();
 
     unsigned int sortBufferSizeMultiplier = 1;

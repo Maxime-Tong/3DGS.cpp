@@ -16,6 +16,7 @@ public:
         bool immediateSwapchain = false;
         std::string scene;
         std::string clusterFolder;
+        std::string cameras;
 
         float fov = 45.0f;
         float near = 0.2f;
