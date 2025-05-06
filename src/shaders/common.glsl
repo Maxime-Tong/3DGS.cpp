@@ -13,6 +13,7 @@
 
 #define MAGIC 0x4d415449u
 
+const float lowest_alpha_coeff = 5.54126354515842f;
 const float SH_C0 = 0.28209479177387814f;
 const float SH_C1 = 0.4886025119029199f;
 const float SH_C2[] = {
