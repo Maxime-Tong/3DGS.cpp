@@ -27,12 +27,20 @@ layout( push_constant ) uniform Constants
 
 layout (local_size_x = TILE_WIDTH, local_size_y = TILE_HEIGHT, local_size_z = 1) in;
 
+// shared bool prefilter[TILE_HEIGHT / 2][TILE_WIDTH / 2];
+
 void main() {
     uint tileX = gl_WorkGroupID.x;
     uint tileY = gl_WorkGroupID.y;
     uint localX = gl_LocalInvocationID.x;
     uint localY = gl_LocalInvocationID.y;
 
+    // if (localX*2 < TILE_WIDTH && localY*2 < TILE_HEIGHT)
+    // {
+    //     prefilter[localY][localX] = false;
+    // }
+
+    // vec2 curr_group_uv = vec2(tileX * TILE_WIDTH + localX*2 + 0.5f, tileY * TILE_HEIGHT + localY*2 + 0.5f);
     uvec2 curr_uv = uvec2(tileX * TILE_WIDTH + localX, tileY * TILE_HEIGHT + localY);
     if (curr_uv.x >= width || curr_uv.y >= height) {
         return;
@@ -61,23 +69,36 @@ void main() {
     for (uint i = start; i < end; i++) {
         uint vertex_key = sorted_vertices[i];
         vec2 uv = attr[vertex_key].uv;
-        vec2 distance = uv - vec2(curr_uv);
         vec4 co = attr[vertex_key].conic_opacity;
-        float power = -0.5f * (co.x * distance.x * distance.x + co.z * distance.y * distance.y) - co.y * distance.x * distance.y;
 
-        if (power > 0.0f) {
-            continue;
-        }
+        // if (localX*2 < TILE_WIDTH && localY*2 < TILE_HEIGHT)
+        // {
+        //     vec2 group_dist = uv - curr_group_uv;
+        //     float group_power = -0.5f * (co.x * group_dist.x * group_dist.x + co.z * group_dist.y * group_dist.y) - co.y * group_dist.x * group_dist.y + co.w;
+        //     prefilter[localY][localX] = group_power < -20.0f;
+        // }
+        // memoryBarrierShared();
+        // barrier();
+
+        // if (prefilter[localY/2][localX/2])
+        // {
+        //     continue;
+        // }
+
+        vec2 dist = uv - vec2(curr_uv);
+        float power = -0.5f * (co.x * dist.x * dist.x + co.z * dist.y * dist.y) - co.y * dist.x * dist.y + co.w;
 
         if (gl_GlobalInvocationID.x == 100) {
 //            debugPrintfEXT("radius %f\n", attr[vertex_key].color_radii.w);
         }
-
-
-        float alpha = min(0.99f, co.w * exp(power));
-        if (alpha < 1.0f / 255.0f) {
+        if (power < -5.5f) {
             continue;
         }
+
+        float alpha = min(0.99, exp(power));
+        // if (alpha < 1.0f / 255.0f) {
+        //     continue;
+        // }
 
         float test_T = T * (1 - alpha);
         if (test_T < 0.0001f) {
