@@ -35,12 +35,6 @@ void main() {
     uint localX = gl_LocalInvocationID.x;
     uint localY = gl_LocalInvocationID.y;
 
-    // if (localX*2 < TILE_WIDTH && localY*2 < TILE_HEIGHT)
-    // {
-    //     prefilter[localY][localX] = false;
-    // }
-
-    // vec2 curr_group_uv = vec2(tileX * TILE_WIDTH + localX*2 + 0.5f, tileY * TILE_HEIGHT + localY*2 + 0.5f);
     uvec2 curr_uv = uvec2(tileX * TILE_WIDTH + localX, tileY * TILE_HEIGHT + localY);
     if (curr_uv.x >= width || curr_uv.y >= height) {
         return;
@@ -71,19 +65,6 @@ void main() {
         vec2 uv = attr[vertex_key].uv;
         vec4 co = attr[vertex_key].conic_opacity;
 
-        // if (localX*2 < TILE_WIDTH && localY*2 < TILE_HEIGHT)
-        // {
-        //     vec2 group_dist = uv - curr_group_uv;
-        //     float group_power = -0.5f * (co.x * group_dist.x * group_dist.x + co.z * group_dist.y * group_dist.y) - co.y * group_dist.x * group_dist.y + co.w;
-        //     prefilter[localY][localX] = group_power < -20.0f;
-        // }
-        // memoryBarrierShared();
-        // barrier();
-
-        // if (prefilter[localY/2][localX/2])
-        // {
-        //     continue;
-        // }
 
         vec2 dist = uv - vec2(curr_uv);
         float power = -0.5f * (co.x * dist.x * dist.x + co.z * dist.y * dist.y) - co.y * dist.x * dist.y + co.w;
@@ -91,11 +72,14 @@ void main() {
         if (gl_GlobalInvocationID.x == 100) {
 //            debugPrintfEXT("radius %f\n", attr[vertex_key].color_radii.w);
         }
-        if (power < -5.5f) {
+        if (power < -5.55f) {
             continue;
         }
 
-        float alpha = min(0.99, exp(power));
+        float tmp_idx_f = max(0.f, power * inv_exp_lut_step);
+        int tmp_idx = int(floor(tmp_idx_f));
+        float alpha = lut[tmp_idx] * (tmp_idx+1.0f-tmp_idx_f) + (tmp_idx_f - tmp_idx) * lut[tmp_idx+1];
+        // float alpha = min(0.99, exp(power));
         // if (alpha < 1.0f / 255.0f) {
         //     continue;
         // }
