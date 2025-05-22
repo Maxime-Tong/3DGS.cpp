@@ -41,8 +41,8 @@ foreach ($dataset in $datasets) {
         Write-Host "执行命令: $exePath --width $width --height $height -c $sceneConfigDir --output_path $output_path --camera_path $camerasJson $pointCloudPly"
         
         # 执行命令
-        # & $exePath --width $width --height $height -c $sceneConfigDir --output_path $output_path --camera_path $camerasJson $pointCloudPly
-        & $exePath --width $width --height $height --output_path $output_path --camera_path $camerasJson $pointCloudPly
+        & $exePath --width $width --height $height -c $sceneConfigDir --output_path $output_path --camera_path $camerasJson $pointCloudPly
+        # & $exePath --width $width --height $height --output_path $output_path --camera_path $camerasJson $pointCloudPly
         
         # 可选: 添加延迟以防止快速连续启动
         Start-Sleep -Seconds 2

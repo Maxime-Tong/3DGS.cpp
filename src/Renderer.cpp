@@ -151,7 +151,7 @@ void Renderer::retrieveTimestamps() {
     if (testCameras.size() != 0)
     {
         timeCollector.push_back(metrics);
-        if (timeCollector.size() == testCameras.size()) {
+        if (timeCollector.size() == testCameras.size() * 2) {
             saveFPS();
             shutdown = true;
         }
