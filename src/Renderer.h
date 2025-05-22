@@ -86,7 +86,7 @@ public:
         .fov = 45.0f,
         .nearPlane = 0.1f,
         .farPlane = 1000.0f,
-        .maskOffset= 0
+        .maskOffset= -1
     };
 
 private:
@@ -145,6 +145,8 @@ private:
 
     float fpsCounter = 0;
     int testCameraIndex = 0;
+    std::vector<std::unordered_map<std::string, uint64_t>> timeCollector;
+    bool shutdown = false;
     std::chrono::high_resolution_clock::time_point lastFpsTime = std::chrono::high_resolution_clock::now();
 
     unsigned int sortBufferSizeMultiplier = 1;
@@ -174,6 +176,8 @@ private:
     void updateUniforms();
 
     void setClusterId();
+
+    void saveFPS();
 };
 
 

@@ -26,6 +26,7 @@ std::unordered_map<std::string, uint64_t> QueryManager::parseResults(const std::
     // print every 1 seconds
     std::lock_guard<std::mutex> lock(mutex);
     std::unordered_map<std::string, uint64_t> resultsMap;
+    uint64_t total = 0;
     for (auto& [name, id] : registry) {
         if (name.ends_with("_start")) {
             auto endName = name.substr(0, name.size() - 5) + "end";
@@ -35,9 +36,11 @@ std::unordered_map<std::string, uint64_t> QueryManager::parseResults(const std::
                 auto diff = end - start;
                 auto truncated = name.substr(0, name.size() - 6);
                 resultsMap[truncated] = diff;
+                total += diff;
             }
         }
     }
+    resultsMap["total"] = total;
     return resultsMap;
     // auto now = std::chrono::high_resolution_clock::now();
     // if (now - lastPrint > std::chrono::seconds(1)) {

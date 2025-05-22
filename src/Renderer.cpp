@@ -17,6 +17,12 @@
 
 #include <spdlog/spdlog.h>
 
+#include <chrono>
+#include <thread>
+
+#include <filesystem>
+namespace fs = std::filesystem;
+
 void Renderer::initialize() {
     initializeVulkan();
     createGui();
@@ -89,10 +95,41 @@ void Renderer::handleInput() {
     {
         if (testCameraIndex < testCameras.size())
         {
+            #ifdef DEBUG
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            #endif
+
             camera = testCameras[testCameraIndex];
             testCameraIndex = (testCameraIndex + 1) % testCameras.size();
         }
     }
+}
+
+void Renderer::saveFPS() {
+    Json::Value root;
+    float average_time = 0;
+    for (auto& metrics : timeCollector)
+    {
+        for(auto& metric : metrics) {
+            root[metric.first].append(metric.second / 1000000.0);
+            average_time += metric.second / 1000000.0;
+        }
+    }
+    root["average_fps"] = timeCollector.size() / average_time;
+    timeCollector.clear();
+
+    std::string outputPath = configuration.output + "/results.json";
+    fs::create_directories(fs::path(configuration.output));
+
+    std::ofstream outFile(outputPath);
+    if (outFile.is_open()) {
+        Json::StreamWriterBuilder writerBuilder;
+        writerBuilder.settings_["indentation"] = "    ";
+        std::unique_ptr<Json::StreamWriter> writer(writerBuilder.newStreamWriter());
+        writer->write(root, &outFile);
+        outFile.close();
+    }
+    printf("Save results to results.json\n");
 }
 
 void Renderer::retrieveTimestamps() {
@@ -109,6 +146,15 @@ void Renderer::retrieveTimestamps() {
     for (auto& metric: metrics) {
         if (configuration.enableGui)
             guiManager.pushMetric(metric.first, metric.second / 1000000.0);
+    }
+
+    if (testCameras.size() != 0)
+    {
+        timeCollector.push_back(metrics);
+        if (timeCollector.size() == testCameras.size()) {
+            saveFPS();
+            shutdown = true;
+        }
     }
 }
 
@@ -169,10 +215,13 @@ void Renderer::initializeVulkan() {
 
 void Renderer::loadSceneToGPU() {
     spdlog::debug("Loading scene to GPU");
-    scene = std::make_shared<GSScene>(configuration.scene, configuration.clusterFolder);
+    if (configuration.clusters == "")
+        scene = std::make_shared<GSScene>(configuration.scene);
+    else
+        scene = std::make_shared<GSScene>(configuration.scene, configuration.clusters);
     scene->load(context);
 
-        if (configuration.cameras != "") {
+    if (configuration.cameras != "") {
         std::ifstream cameraFile(configuration.cameras);
         Json::Value root;
 
@@ -189,14 +238,16 @@ void Renderer::loadSceneToGPU() {
                 camera["position"][0].asFloat(), 
                 camera["position"][1].asFloat(), 
                 camera["position"][2].asFloat());
+            // column-major !
             glm::mat3 rot = glm::mat3(
-                camera["rotation"][0][1].asFloat(), camera["rotation"][0][2].asFloat(), camera["rotation"][0][3].asFloat(), 
-                camera["rotation"][1][1].asFloat(), camera["rotation"][1][2].asFloat(), camera["rotation"][1][3].asFloat(), 
-                camera["rotation"][2][1].asFloat(), camera["rotation"][2][2].asFloat(), camera["rotation"][2][3].asFloat());
+                camera["rotation"][0][0].asFloat(), camera["rotation"][1][0].asFloat(), camera["rotation"][2][0].asFloat(), 
+                camera["rotation"][0][1].asFloat(), camera["rotation"][1][1].asFloat(), camera["rotation"][2][1].asFloat(), 
+                camera["rotation"][0][2].asFloat(), camera["rotation"][1][2].asFloat(), camera["rotation"][2][2].asFloat());
             glm::quat quat = glm::quat_cast(rot);
+            float fov = 2.0 * std::atan2(camera["width"].asFloat(), 2.0 * camera["fx"].asFloat()) * (180.0 / 3.1415926535);
             testCameras.push_back(Camera{.position = pos,
                 .rotation = quat,
-                .fov = 45.0f,
+                .fov = fov,
                 .nearPlane = 0.1f,
                 .farPlane = 1000.0f});
         }
@@ -472,7 +523,7 @@ startOfRenderLoop:
 
 void Renderer::run() {
     while (running) {
-        if (!window->tick()) {
+        if (!window->tick() || shutdown) {
             break;
         }
 
@@ -784,19 +835,21 @@ void Renderer::updateUniforms() {
                                      camera.nearPlane,
                                      camera.farPlane) * view;
 
-    // data.view_mat[0][1] *= -1.0f;
-    // data.view_mat[1][1] *= -1.0f;
-    // data.view_mat[2][1] *= -1.0f;
-    // data.view_mat[3][1] *= -1.0f;
-    data.view_mat[0][2] *= -1.0f;
-    data.view_mat[1][2] *= -1.0f;
-    data.view_mat[2][2] *= -1.0f;
-    data.view_mat[3][2] *= -1.0f;
+    data.view_mat[0][1] *= -1.0f;
+    data.view_mat[1][1] *= -1.0f;
+    data.view_mat[2][1] *= -1.0f;
+    data.view_mat[3][1] *= -1.0f;
 
-    // data.proj_mat[0][1] *= -1.0f;
-    // data.proj_mat[1][1] *= -1.0f;
-    // data.proj_mat[2][1] *= -1.0f;
-    // data.proj_mat[3][1] *= -1.0f;
+    // data.view_mat[0][2] *= -1.0f;
+    // data.view_mat[1][2] *= -1.0f;
+    // data.view_mat[2][2] *= -1.0f;
+    // data.view_mat[3][2] *= -1.0f;
+
+    data.proj_mat[0][1] *= -1.0f;
+    data.proj_mat[1][1] *= -1.0f;
+    data.proj_mat[2][1] *= -1.0f;
+    data.proj_mat[3][1] *= -1.0f;
+
     data.tan_fovx = tan_fovx;
     data.tan_fovy = tan_fovy;
     uniformBuffer->upload(&data, sizeof(UniformBuffer), 0);
@@ -815,17 +868,26 @@ void Renderer::updateUniforms() {
 }
 
 void Renderer::setClusterId() {
+    if (!scene->use_cluster)
+    {
+        camera.maskOffset = -1;
+        return;
+    }
+
     float minDist = std::numeric_limits<float>::max();
-    GSScene::clusterFeature camera_feature = {camera.position, glm::conjugate(glm::normalize(camera.rotation))};
+    GSScene::clusterFeature camera_feature = {camera.position, camera.rotation};
     
-    for (int cid = 0; cid < scene->clusters.size(); cid++) {
+    int cid, min_cid;
+    for (cid = 0; cid < scene->clusters.size(); cid++) {
         float dist = scene->clusters[cid].distance(camera_feature);
         if (dist < minDist) {
             minDist = dist;
+            min_cid = cid;
             camera.maskOffset = cid * scene->getNumVertices();
         }
     }
 
+    // spdlog::info("Camera cid: {}, Cluster Gaussians: {}, Total Gaussians: {}.", min_cid, scene->clusters[min_cid].numGaussians, scene->getNumVertices());
     // printf("camera rotation: %f %f %f %f \t cluster rotation: %f %f %f %f \t cid: %d\n", 
     //        camera_feature.rotation.w,
     //        camera_feature.rotation.x, 

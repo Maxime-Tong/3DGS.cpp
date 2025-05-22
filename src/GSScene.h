@@ -23,20 +23,20 @@ struct PlyHeader {
 
 class GSScene {
 public:
-    explicit GSScene(const std::string& filename, const std::string& clusterFolder)
-        : filename(filename), clusterFolder(clusterFolder) {
+    explicit GSScene(const std::string& filename, const std::string& _clusterPath)
+        : filename(filename), clusterPath(_clusterPath), use_cluster(true) {
         // check if file exists
         if (!std::filesystem::exists(filename)) {
             throw std::runtime_error("File does not exist: " + filename);
         }
         // check if cluster folder exists
-        if (!std::filesystem::exists(clusterFolder)) {
-            throw std::runtime_error("Cluster folder does not exist: " + clusterFolder);
+        if (!std::filesystem::exists(clusterPath)) {
+            throw std::runtime_error("Cluster folder does not exist: " + clusterPath);
         }
     }
 
     explicit GSScene(const std::string& filename)
-        : filename(filename) {
+        : filename(filename), use_cluster(false) {
         // check if file exists
         if (!std::filesystem::exists(filename)) {
             throw std::runtime_error("File does not exist: " + filename);
@@ -58,15 +58,26 @@ public:
         float shs[48];
     };
 
+    // struct Scaler {
+    //     glm::vec3 position_mean;
+    //     glm::vec4 rotation_mean;
+    //     glm::vec3 position_scale;
+    //     glm::vec4 rotation_scale;
+    // };
+
     struct clusterFeature {
         glm::vec3 position; // x, y, z
         glm::quat rotation; // w, a, b, c
+        int numGaussians;
 
         float distance(const clusterFeature& other) const {
-            // ||position - other.position||^2 + ||rotation - other.rotation||^2
-            float d1 = glm::length(position - other.position);
-            float d2 = glm::length(rotation - other.rotation);
-            return d1 * d1 + d2 * d2;
+            glm::vec3 dp = (position - other.position);
+
+            glm::vec4 q1(rotation.w, rotation.x, rotation.y, rotation.z);
+            glm::vec4 q2(other.rotation.w, other.rotation.x, other.rotation.y, other.rotation.z);
+            glm::vec4 dr = (q1 - q2);
+
+            return glm::dot(dp, dp) + glm::dot(dr, dr);
         }
     };
 
@@ -78,11 +89,13 @@ public:
     std::shared_ptr<Buffer> cov3DBuffer;
     std::shared_ptr<Buffer> clusterMaskBuffer;
     
+    bool use_cluster;
     std::vector<clusterFeature> clusters;
+    // Scaler scaler;
     
 private:
     std::string filename;
-    std::string clusterFolder;
+    std::string clusterPath;
 
     PlyHeader header;
 

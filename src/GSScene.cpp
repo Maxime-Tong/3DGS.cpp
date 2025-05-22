@@ -63,40 +63,67 @@ void GSScene::load(const std::shared_ptr<VulkanContext>&context) {
     vertexBuffer->uploadFrom(vertexStagingBuffer);
 
     // Load the cluster data
-    std::string clusterJsonPath = clusterFolder + "/clusters.json";
-    std::ifstream clusterFile(clusterJsonPath);
-    if (!clusterFile.is_open()) {
-        throw std::runtime_error("Could not open cluster file: " + clusterJsonPath);
-    }
-    nlohmann::json clusterJson;
-    clusterFile >> clusterJson;
-    const auto& centers = clusterJson["centers"];
-    const auto& gaussianIdxs = clusterJson["gaussian_idxs"];
-#ifdef DEBUG
-    printf("Loaded {%d} clusters\n", centers.size());
-#endif
-    size_t numClusters = centers.size();
-    auto clusterMaskStagingBuffer = Buffer::staging(context, numClusters * header.numVertices * sizeof(int));
-    auto* clusterMasks = static_cast<int *>(clusterMaskStagingBuffer->allocation_info.pMappedData);
-
-    memset(clusterMasks, 0, numClusters * header.numVertices * sizeof(int));
-    for (size_t i = 0; i < numClusters; i++) {
-        auto center = centers[i].get<std::vector<float>>();
-        clusters.push_back({
-            glm::vec3(center.at(0), center.at(1), center.at(2)), 
-            glm::quat(center.at(6), center.at(3), center.at(4), center.at(5))
-        });
-        
-        auto gaussianIdx = gaussianIdxs[i].get<std::vector<int>>();
-        auto* current_mask = clusterMasks + i * header.numVertices;
-        for (const auto& idx : gaussianIdx) {
-            current_mask[idx] = 1;
+    if (use_cluster)
+    {
+        std::string clusterJsonPath = clusterPath + "/cluster_meta.json";
+        std::ifstream clusterFile(clusterJsonPath);
+        if (!clusterFile.is_open()) {
+            throw std::runtime_error("Could not open cluster file: " + clusterJsonPath);
         }
-        // printf("Cluster %zu: header.numVertices = %d, gaussianIdxs = %d\n", i, header.numVertices, gaussianIdx.size());
-    }
+        nlohmann::json clusterJson;
+        clusterFile >> clusterJson;
+        clusterFile.close();
+        const auto& centers = clusterJson["centers"];
+        const auto numClusters = clusterJson["n_clusters"].get<size_t>();
+        const auto numGaussians = clusterJson["n_gaussians"].get<size_t>();
+        
+        // // Load Scaler
+        // const auto& mean = clusterJson["mean"].get<std::vector<float>>();
+        // const auto& scale = clusterJson["scale"].get<std::vector<float>>();
+        // scaler.position_mean = {mean[0], mean[1], mean[2]};
+        // scaler.rotation_mean = {mean[6], mean[3], mean[4], mean[5]};
+        // scaler.position_scale = {scale[0], scale[1], scale[2]};
+        // scaler.rotation_scale = {scale[6], scale[3], scale[4], scale[5]};
 
-    clusterMaskBuffer = createBuffer(context, numClusters * header.numVertices * sizeof(int));
-    clusterMaskBuffer->uploadFrom(clusterMaskStagingBuffer);
+        // Load Cluster Gaussian Idxs
+        std::string clusterGaussiansPath = clusterPath + "/cluster_gaussians.bin";
+        std::ifstream gaussianFile(clusterGaussiansPath, std::ios::binary);
+        if (!gaussianFile.is_open()) {
+            throw std::runtime_error("Could not open cluster file: " + clusterGaussiansPath);
+        }
+        std::vector<uint8_t> gaussianBuffer(numClusters * numGaussians);
+        gaussianFile.read(reinterpret_cast<char*>(gaussianBuffer.data()), gaussianBuffer.size());
+        gaussianFile.close();
+
+        auto clusterMaskStagingBuffer = Buffer::staging(context, numClusters * header.numVertices * sizeof(int));
+        auto* clusterMasks = static_cast<int *>(clusterMaskStagingBuffer->allocation_info.pMappedData);
+
+        memset(clusterMasks, 0, numClusters * header.numVertices * sizeof(int));
+        for (size_t i = 0; i < numClusters; i++) {
+            int visibleGaussians = 0;
+            auto* current_mask = clusterMasks + i * header.numVertices;
+            for (int j = 0; j < numGaussians; j++) {
+                if (gaussianBuffer[i * numGaussians + j] == 1) 
+                {
+                    current_mask[j] = 1;
+                    visibleGaussians++;
+                }
+            }
+
+            auto center = centers[i].get<std::vector<float>>();
+            clusters.push_back({
+                glm::vec3(center.at(0), center.at(1), center.at(2)), 
+                glm::quat(center.at(6), center.at(3), center.at(4), center.at(5)),
+                visibleGaussians
+            });
+            // printf("Cluster %zu: header.numVertices = %d, gaussianIdxs = %d\n", i, header.numVertices, gaussianIdx.size());
+        }
+
+        clusterMaskBuffer = createBuffer(context, numClusters * header.numVertices * sizeof(int));
+        clusterMaskBuffer->uploadFrom(clusterMaskStagingBuffer);
+    } else {
+        clusterMaskBuffer = createBuffer(context, 42 * sizeof(int)); // TODO: clusterMaskBuffer upload when it points to nullptr.
+    }
 
     auto endTime = std::chrono::high_resolution_clock::now();
     spdlog::info("Loaded {} in {}ms", filename,

@@ -25,15 +25,16 @@ int main(int argc, char** argv) {
     args::ValueFlag<uint32_t> widthFlag{parser, "width", "Set window width", {'w', "width"}};
     args::ValueFlag<uint32_t> heightFlag{parser, "height", "Set window height", {'h', "height"}};
     args::Flag noGuiFlag{parser, "no-gui", "Disable GUI", { "no-gui"}};
-    args::ValueFlag<std::string> clusterFolder{
+    args::ValueFlag<std::string> clusterPath{
         parser, 
-        "cluster-folder", 
-        "Path to folder containing cluster information (default: empty)", 
-        {'c', "cluster-folder"},
-        ""  // default empty string
+        "clusters", 
+        "Path to folder containing cluster information", 
+        {'c', "cluster_path"},
+        ""
     };
     // test cameras json
     args::ValueFlag<std::string> cameraPathFlag(parser, "cameras", "Path to test cameras", {"camera_path"});
+    args::ValueFlag<std::string> outputPathFlag(parser, "output", "Path to output", {"output_path"});
     args::Positional<std::string> scenePath{parser, "scene", "Path to scene file", "scene.ply"};
 
 
@@ -70,8 +71,9 @@ int main(int argc, char** argv) {
             : std::nullopt,
         envVars.get_or(immediateSwapchain, false),
         args::get(scenePath),
-        args::get(clusterFolder),
-        cameraPathFlag ? args::get(cameraPathFlag) : ""
+        args::get(clusterPath),
+        cameraPathFlag ? args::get(cameraPathFlag) : "",
+        outputPathFlag ? args::get(outputPathFlag) : ""
     };
 
     // check that the scene file exists

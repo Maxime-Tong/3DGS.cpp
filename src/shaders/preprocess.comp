@@ -11,6 +11,10 @@ layout (std430, set = 0, binding = 1) readonly buffer Cov3Ds {
     float cov3ds[];
 };
 
+layout (std430, set = 0, binding = 2) readonly buffer ClusterMasks {
+    int clusterMasks[];
+};
+
 layout (std140, set = 1, binding = 0) uniform Params {
     vec4 camera_position;
     mat4 proj_mat;
@@ -19,6 +23,7 @@ layout (std140, set = 1, binding = 0) uniform Params {
     uint height;
     float tan_fovx;
     float tan_fovy;
+    int maskOffset;
 };
 
 layout (std430, set = 1, binding = 1) writeonly buffer VertexAttributes {
@@ -132,7 +137,7 @@ void main() {
     vec3 ndc = vec3(p_hom.xyz * p_w);
 
     vec4 p_view = view_mat * vertices[index].position;
-    if (p_view.z <= 0.2f) {
+    if (p_view.z <= 0.2f || (maskOffset != -1 && clusterMasks[index + maskOffset] == 0)) {
         return;
     }
 
